@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>16x16 Rainbow Arcade - Final</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0b0b10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+        }
+        .main-container {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+        }
+        .side-pane {
+            width: 240px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.6;
+        }
+        #restart-msg {
+            color: #4ade80;
+            font-size: 16px;
+            visibility: hidden;
+            text-shadow: 2px 2px #14532d;
+        }
+        #game-over-msg {
+            color: #ff0000;
+            font-size: 38px;
+            font-weight: 900;
+            visibility: hidden;
+            text-shadow: 4px 4px #4b0000;
+        }
+        .hud {
+            width: 480px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .hearts-container { display: flex; gap: 12px; }
+        .heart-icon { 
+            width: 32px; /* Downscaled from the large original texture */
+            height: 32px; 
+            object-fit: contain;
+            image-rendering: pixelated; /* Keeps it sharp and retro */
+        }
+        canvas {
+            background-color: #000;
+            border: 4px solid #fff;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+            cursor: none;
+        }
+        .footer-hint {
+            margin-top: 25px;
+            font-size: 12px;
+            color: #aaaaaa;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hud">
+        <div id="hearts" class="hearts-container"></div>
+        <div id="score">00100</div>
+    </div>
+    
+    <div class="main-container">
+        <div class="side-pane">
+            <div id="restart-msg">RELOAD<br>TO<br>RESTART</div>
+        </div>
+
+        <canvas id="gameCanvas" width="480" height="500"></canvas>
+
+        <div class="side-pane">
+            <div id="game-over-msg">GAME<br>OVER!</div>
+        </div>
+    </div>
+
+    <div class="footer-hint">Use Mouse or Touch to move the paddle</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const heartContainer = document.getElementById("hearts");
+    const gameOverEl = document.getElementById("game-over-msg");
+    const restartEl = document.getElementById("restart-msg");
+
+    const ROWS = 16, COLS = 16;
+    const BRICK_W = 28, BRICK_H = 12, GAP = 2;
+    const HEART_CDN = "https://cdn.discordapp.com/attachments/1370669130335784992/1467058568535609479/8-bit_heart.jpg?ex=697f0043&is=697daec3&hm=1513cf6fd3cb64b364a5a3f4b02ac199848f9cfb5fa830743b85bc6229c5fad1";
+
+    let score = 100, lives = 3, isGameOver = false;
+    let ball = { x: 240, y: 430, dx: 4, dy: -4, r: 6 };
+    let paddle = { w: 85, h: 10, x: 197.5 };
+    let bricks = [];
+
+    const rainbow = [
+        "#FF0000", "#FF4500", "#FF8C00", "#FFA500", "#FFD700", "#FFFF00", "#ADFF2F", "#7FFF00", 
+        "#00FF00", "#00FA9A", "#00FFFF", "#1E90FF", "#0000FF", "#8A2BE2", "#9400D3", "#FF00FF"
+    ];
+
+    function initBricks() {
+        for(let r = 0; r < ROWS; r++) {
+            bricks[r] = [];
+            for(let c = 0; c < COLS; c++) {
+                bricks[r][c] = { active: 1, color: rainbow[r % rainbow.length] };
+            }
+        }
+    }
+
+    function updateHearts() {
+        heartContainer.innerHTML = "";
+        for(let i=0; i<lives; i++) {
+            const img = document.createElement("img");
+            img.src = HEART_CDN;
+            img.className = "heart-icon";
+            heartContainer.appendChild(img);
+        }
+    }
+
+    document.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let mouseX = e.clientX - rect.left;
+        paddle.x = mouseX - paddle.w / 2;
+        // Clamp boundaries
+        if (paddle.x < 0) paddle.x = 0;
+        if (paddle.x + paddle.w > canvas.width) paddle.x = canvas.width - paddle.w;
+    });
+
+    function draw() {
+        if (isGameOver) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 16x16 Rainbow Bricks
+        for(let r = 0; r < ROWS; r++) {
+            for(let c = 0; c < COLS; c++) {
+                let b = bricks[r][c];
+                if(b.active) {
+                    let bx = c * (BRICK_W + GAP) + 1;
+                    let by = r * (BRICK_H + GAP) + 40;
+                    ctx.fillStyle = b.color;
+                    ctx.fillRect(bx, by, BRICK_W, BRICK_H);
+
+                    if(ball.x > bx && ball.x < bx + BRICK_W && ball.y > by && ball.y < by + BRICK_H) {
+                        ball.dy = -ball.dy;
+                        b.active = 0;
+                        score += 10;
+                        scoreEl.innerText = score.toString().padStart(5, '0');
+                    }
+                }
+            }
+        }
+
+        // Paddle - Fixed at OG Height
+        ctx.fillStyle = "#FFF";
+        ctx.fillRect(paddle.x, canvas.height - paddle.h - 10, paddle.w, paddle.h);
+
+        // Ball
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+        ctx.fill();
+
+        // Wall Bounces
+        if(ball.x + ball.dx > canvas.width - ball.r || ball.x + ball.dx < ball.r) ball.dx = -ball.dx;
+        if(ball.y + ball.dy < ball.r) ball.dy = -ball.dy;
+
+        // OG Collision Zone (Crash Zone Allowed)
+        if(ball.y + ball.dy > canvas.height - paddle.h - 20) {
+            if(ball.x > paddle.x && ball.x < paddle.x + paddle.w) {
+                ball.dy = -Math.abs(ball.dy);
+                let impact = (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2);
+                ball.dx = impact * 5;
+            }
+        }
+
+        // Death Handling
+        if(ball.y > canvas.height) {
+            lives--;
+            updateHearts();
+            if(lives <= 0) {
+                isGameOver = true;
+                gameOverEl.style.visibility = "visible";
+                restartEl.style.visibility = "visible";
+            } else {
+                ball.x = 240; ball.y = 430; ball.dy = -4; ball.dx = 4;
+            }
+        }
+
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+        requestAnimationFrame(draw);
+    }
+
+    initBricks();
+    updateHearts();
+    draw();
+</script>
+</body>
+</html>
